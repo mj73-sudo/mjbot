@@ -48,6 +48,8 @@ public class CacheConfiguration {
             createCache(cm, org.mjbot.domain.User.class.getName());
             createCache(cm, org.mjbot.domain.Authority.class.getName());
             createCache(cm, org.mjbot.domain.User.class.getName() + ".authorities");
+            createCache(cm, org.mjbot.domain.Symbol.class.getName());
+            createCache(cm, org.mjbot.domain.Kline.class.getName());
             // jhipster-needle-ehcache-add-entry
         };
     }

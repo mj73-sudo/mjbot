@@ -1,5 +1,13 @@
 <template>
   <div>
+    <b-dropdown-item to="/symbol">
+      <font-awesome-icon icon="asterisk" />
+      <span>Symbol</span>
+    </b-dropdown-item>
+    <b-dropdown-item to="/kline">
+      <font-awesome-icon icon="asterisk" />
+      <span>Kline</span>
+    </b-dropdown-item>
     <!-- jhipster-needle-add-entity-to-menu - JHipster will add entities to the menu here -->
   </div>
 </template>

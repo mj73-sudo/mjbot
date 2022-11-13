@@ -1,0 +1,41 @@
+entity Symbol {
+    symbol String required
+    name String required
+    baseCurrency String
+    quoteCurrency String
+    feeCurrency String
+    market String
+    baseMinSize String
+    quoteMinSize String
+    baseMaxSize String
+    quoteMaxSize String
+    baseIncrement String
+    quoteIncrement String
+    priceIncrement String
+    priceLimitRate String
+    minFunds String
+    isMarginEnabled Boolean
+    enableTrading Boolean
+    active Boolean
+}
+
+entity Kline {
+    time Long
+    open String
+    close String
+    high String
+    low String
+    volume String
+    turnover String
+    timeType String
+}
+
+relationship ManyToOne {
+    Kline{symbol(symbol)} to Symbol
+}
+
+dto * with mapstruct
+paginate * with pagination
+service * with serviceClass
+filter *
+

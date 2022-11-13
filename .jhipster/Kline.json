@@ -1,0 +1,55 @@
+{
+  "applications": "*",
+  "changelogDate": "20221113141640",
+  "dto": "mapstruct",
+  "embedded": false,
+  "entityTableName": "kline",
+  "fields": [
+    {
+      "fieldName": "time",
+      "fieldType": "Long"
+    },
+    {
+      "fieldName": "open",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "close",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "high",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "low",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "volume",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "turnover",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "timeType",
+      "fieldType": "String"
+    }
+  ],
+  "fluentMethods": true,
+  "jpaMetamodelFiltering": true,
+  "name": "Kline",
+  "pagination": "pagination",
+  "readOnly": false,
+  "relationships": [
+    {
+      "otherEntityField": "symbol",
+      "otherEntityName": "symbol",
+      "relationshipName": "symbol",
+      "relationshipType": "many-to-one"
+    }
+  ],
+  "service": "serviceClass"
+}
