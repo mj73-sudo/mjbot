@@ -1,6 +1,12 @@
 package org.mjbot.service;
 
+import com.kucoin.sdk.KucoinClientBuilder;
+import com.kucoin.sdk.KucoinRestClient;
+import com.kucoin.sdk.rest.response.SymbolResponse;
+import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.mjbot.domain.Symbol;
 import org.mjbot.repository.SymbolRepository;
 import org.mjbot.service.dto.SymbolDTO;
@@ -9,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -108,5 +115,26 @@ public class SymbolService {
     public void delete(Long id) {
         log.debug("Request to delete Symbol : {}", id);
         symbolRepository.deleteById(id);
+    }
+
+    @Scheduled(initialDelay = 1, fixedRate = 1000 * 60 * 60 * 24 * 7)
+    public void getSymbols() throws IOException {
+        KucoinClientBuilder builder = new KucoinClientBuilder();
+        KucoinRestClient restClient = builder.buildRestClient();
+
+        List<SymbolResponse> response = restClient.symbolAPI().getSymbols();
+        List<Symbol> symbols = response
+            .stream()
+            .filter(res -> {
+                if (res.getQuoteCurrency().equalsIgnoreCase("usdt")) {
+                    boolean b = symbolRepository.existsAllBySymbol(res.getSymbol());
+                    return !b;
+                } else {
+                    return false;
+                }
+            })
+            .map(symbolMapper::responseToSymbol)
+            .collect(Collectors.toList());
+        symbolRepository.saveAll(symbols);
     }
 }

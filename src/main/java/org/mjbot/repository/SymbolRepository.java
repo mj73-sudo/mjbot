@@ -1,7 +1,8 @@
 package org.mjbot.repository;
 
 import org.mjbot.domain.Symbol;
-import org.springframework.data.jpa.repository.*;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -9,4 +10,6 @@ import org.springframework.stereotype.Repository;
  */
 @SuppressWarnings("unused")
 @Repository
-public interface SymbolRepository extends JpaRepository<Symbol, Long>, JpaSpecificationExecutor<Symbol> {}
+public interface SymbolRepository extends JpaRepository<Symbol, Long>, JpaSpecificationExecutor<Symbol> {
+    boolean existsAllBySymbol(String symbol);
+}
