@@ -37,4 +37,6 @@ public interface KlineRepository extends JpaRepository<Kline, Long>, JpaSpecific
 
     @Query("select kline from Kline kline left join fetch kline.symbol where kline.id =:id")
     Optional<Kline> findOneWithToOneRelationships(@Param("id") Long id);
+
+    Kline findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(Long symbolId, String timeType);
 }

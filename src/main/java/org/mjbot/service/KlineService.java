@@ -1,14 +1,22 @@
 package org.mjbot.service;
 
+import com.kucoin.sdk.KucoinClientBuilder;
+import com.kucoin.sdk.KucoinRestClient;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.mjbot.domain.Kline;
+import org.mjbot.domain.Symbol;
 import org.mjbot.repository.KlineRepository;
+import org.mjbot.repository.SymbolRepository;
 import org.mjbot.service.dto.KlineDTO;
 import org.mjbot.service.mapper.KlineMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,9 +33,12 @@ public class KlineService {
 
     private final KlineMapper klineMapper;
 
-    public KlineService(KlineRepository klineRepository, KlineMapper klineMapper) {
+    private final SymbolRepository symbolRepository;
+
+    public KlineService(KlineRepository klineRepository, KlineMapper klineMapper, SymbolRepository symbolRepository) {
         this.klineRepository = klineRepository;
         this.klineMapper = klineMapper;
+        this.symbolRepository = symbolRepository;
     }
 
     /**
@@ -117,5 +128,39 @@ public class KlineService {
     public void delete(Long id) {
         log.debug("Request to delete Kline : {}", id);
         klineRepository.deleteById(id);
+    }
+
+    @Scheduled(cron = "0 */1 * * * *")
+    public void getKlinesEvery1Min() {
+        KucoinClientBuilder builder = new KucoinClientBuilder();
+        KucoinRestClient restClient = builder.buildRestClient();
+
+        List<Symbol> actives = symbolRepository.findAllByActive(true);
+        for (Symbol symbol : actives) {
+            Kline lastKline = klineRepository.findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(symbol.getId(), "1min");
+            try {
+                Thread.sleep(5000);
+                List<Kline> klines = new ArrayList<>();
+                List<List<String>> historicRates = restClient
+                    .historyAPI()
+                    .getHistoricRates(symbol.getSymbol(), lastKline != null ? lastKline.getTime() : 0, 0, "1min");
+                historicRates.forEach(strings -> {
+                    Kline kline = new Kline()
+                        .time(Long.valueOf(strings.get(0)))
+                        .open(strings.get(1))
+                        .close(strings.get(2))
+                        .high(strings.get(3))
+                        .low(strings.get(4))
+                        .volume(strings.get(5))
+                        .turnover(strings.get(6))
+                        .timeType("1min")
+                        .symbol(symbol);
+                    klines.add(kline);
+                });
+                klineRepository.saveAllAndFlush(klines);
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
