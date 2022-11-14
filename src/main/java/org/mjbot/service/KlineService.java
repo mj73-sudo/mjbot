@@ -145,16 +145,25 @@ public class KlineService {
                     .historyAPI()
                     .getHistoricRates(symbol.getSymbol(), lastKline != null ? lastKline.getTime() : 0, 0, "1min");
                 historicRates.forEach(strings -> {
-                    Kline kline = new Kline()
-                        .time(Long.valueOf(strings.get(0)))
-                        .open(strings.get(1))
-                        .close(strings.get(2))
-                        .high(strings.get(3))
-                        .low(strings.get(4))
-                        .volume(strings.get(5))
-                        .turnover(strings.get(6))
-                        .timeType("1min")
-                        .symbol(symbol);
+                    Kline kline = klineRepository.findFirstByTimeAndTimeTypeAndSymbol_Id(
+                        Long.valueOf(strings.get(0)),
+                        "1min",
+                        symbol.getId()
+                    );
+                    if (kline == null) {
+                        kline = new Kline();
+                    }
+                    kline =
+                        kline
+                            .time(Long.valueOf(strings.get(0)))
+                            .open(strings.get(1))
+                            .close(strings.get(2))
+                            .high(strings.get(3))
+                            .low(strings.get(4))
+                            .volume(strings.get(5))
+                            .turnover(strings.get(6))
+                            .timeType("1min")
+                            .symbol(symbol);
                     klines.add(kline);
                 });
                 klineRepository.saveAllAndFlush(klines);

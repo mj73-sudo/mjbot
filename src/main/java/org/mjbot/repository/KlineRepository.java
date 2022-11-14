@@ -39,4 +39,6 @@ public interface KlineRepository extends JpaRepository<Kline, Long>, JpaSpecific
     Optional<Kline> findOneWithToOneRelationships(@Param("id") Long id);
 
     Kline findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(Long symbolId, String timeType);
+
+    Kline findFirstByTimeAndTimeTypeAndSymbol_Id(Long time, String timeType, Long symbolId);
 }
