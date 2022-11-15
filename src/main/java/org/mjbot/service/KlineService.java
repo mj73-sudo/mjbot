@@ -1,8 +1,6 @@
 package org.mjbot.service;
 
-import com.kucoin.sdk.KucoinClientBuilder;
 import com.kucoin.sdk.KucoinRestClient;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,10 +34,18 @@ public class KlineService {
 
     private final SymbolRepository symbolRepository;
 
-    public KlineService(KlineRepository klineRepository, KlineMapper klineMapper, SymbolRepository symbolRepository) {
+    private final KucoinRestClient kucoinRestClient;
+
+    public KlineService(
+        KlineRepository klineRepository,
+        KlineMapper klineMapper,
+        SymbolRepository symbolRepository,
+        KucoinRestClient kucoinRestClient
+    ) {
         this.klineRepository = klineRepository;
         this.klineMapper = klineMapper;
         this.symbolRepository = symbolRepository;
+        this.kucoinRestClient = kucoinRestClient;
     }
 
     /**
@@ -130,37 +137,44 @@ public class KlineService {
         klineRepository.deleteById(id);
     }
 
-    @Scheduled(cron = "0 */1 * * * *")
-    public void getKlinesEvery1Min() {
-        KucoinClientBuilder builder = new KucoinClientBuilder();
-        KucoinRestClient restClient = builder.buildRestClient();
-
+    @Scheduled(cron = "0 */5 * * * *")
+    public void getKlinesEvery5Min() {
         List<Symbol> actives = symbolRepository.findAllByActive(true);
         for (Symbol symbol : actives) {
-            Kline lastKline = klineRepository.findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(symbol.getId(), "1min");
+            Kline lastKline = klineRepository.findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(symbol.getId(), "5min");
             try {
-                Thread.sleep(5000);
+                Thread.sleep(100);
                 List<Kline> klines = new ArrayList<>();
-                List<List<String>> historicRates = restClient
-                    .historyAPI()
-                    .getHistoricRates(symbol.getSymbol(), lastKline != null ? lastKline.getTime() : 0, 0, "1min");
-                historicRates.forEach(strings -> {
-                    Kline kline = new Kline()
-                        .time(Long.valueOf(strings.get(0)))
-                        .open(strings.get(1))
-                        .close(strings.get(2))
-                        .high(strings.get(3))
-                        .low(strings.get(4))
-                        .volume(strings.get(5))
-                        .turnover(strings.get(6))
-                        .timeType("1min")
-                        .symbol(symbol);
-                    klines.add(kline);
-                });
-                klineRepository.saveAllAndFlush(klines);
-            } catch (IOException | InterruptedException e) {
+                try {
+                    List<List<String>> historicRates = kucoinRestClient
+                        .historyAPI()
+                        .getHistoricRates(symbol.getSymbol(), lastKline != null ? lastKline.getTime() : 0, 0, "5min");
+                    historicRates.forEach(strings -> {
+                        Kline kline = new Kline()
+                            .time(Long.valueOf(strings.get(0)))
+                            .open(strings.get(1))
+                            .close(strings.get(2))
+                            .high(strings.get(3))
+                            .low(strings.get(4))
+                            .volume(strings.get(5))
+                            .turnover(strings.get(6))
+                            .timeType("1min")
+                            .symbol(symbol);
+                        klines.add(kline);
+                    });
+                    log.debug("insert -{}- symbol to db.", symbol.getSymbol());
+                    saveToDb(klines);
+                } catch (Exception e) {
+                    log.error(e.getMessage());
+                }
+            } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    @Async
+    public void saveToDb(List<Kline> klines) {
+        klineRepository.saveAllAndFlush(klines);
     }
 }

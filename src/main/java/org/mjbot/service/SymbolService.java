@@ -1,6 +1,5 @@
 package org.mjbot.service;
 
-import com.kucoin.sdk.KucoinClientBuilder;
 import com.kucoin.sdk.KucoinRestClient;
 import com.kucoin.sdk.rest.response.SymbolResponse;
 import java.io.IOException;
@@ -32,9 +31,12 @@ public class SymbolService {
 
     private final SymbolMapper symbolMapper;
 
-    public SymbolService(SymbolRepository symbolRepository, SymbolMapper symbolMapper) {
+    private final KucoinRestClient kucoinRestClient;
+
+    public SymbolService(SymbolRepository symbolRepository, SymbolMapper symbolMapper, KucoinRestClient kucoinRestClient) {
         this.symbolRepository = symbolRepository;
         this.symbolMapper = symbolMapper;
+        this.kucoinRestClient = kucoinRestClient;
     }
 
     /**
@@ -119,10 +121,7 @@ public class SymbolService {
 
     @Scheduled(initialDelay = 1, fixedRate = 1000 * 60 * 60 * 24 * 7)
     public void getSymbols() throws IOException {
-        KucoinClientBuilder builder = new KucoinClientBuilder();
-        KucoinRestClient restClient = builder.buildRestClient();
-
-        List<SymbolResponse> response = restClient.symbolAPI().getSymbols();
+        List<SymbolResponse> response = kucoinRestClient.symbolAPI().getSymbols();
         List<Symbol> symbols = response
             .stream()
             .filter(res -> {
