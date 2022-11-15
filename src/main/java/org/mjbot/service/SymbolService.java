@@ -119,7 +119,7 @@ public class SymbolService {
         symbolRepository.deleteById(id);
     }
 
-    @Scheduled(initialDelay = 1, fixedRate = 1000 * 60 * 60 * 24 * 7)
+    //    @Scheduled(initialDelay = 1, fixedRate = 1000 * 60 * 60 * 24 * 7)
     public void getSymbols() throws IOException {
         List<SymbolResponse> response = kucoinRestClient.symbolAPI().getSymbols();
         List<Symbol> symbols = response

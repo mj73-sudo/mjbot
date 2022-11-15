@@ -19,6 +19,7 @@ logging:
     tech.jhipster: DEBUG
     org.hibernate.SQL: DEBUG
     org.mjbot: DEBUG
+    jdk.internal.httpclient: off
 
 spring:
   devtools:

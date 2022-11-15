@@ -139,7 +139,7 @@ public class KlineService {
         klineRepository.deleteById(id);
     }
 
-    @Scheduled(cron = "0 */5 * * * *")
+    //    @Scheduled(cron = "0 */5 * * * *")
     public void getKlinesEvery5Min() {
         List<Symbol> actives = symbolRepository.findAllByActive(true);
         for (Symbol symbol : actives) {
@@ -171,7 +171,7 @@ public class KlineService {
                             .symbol(symbol);
                     klines.add(kline);
                 });
-                klineRepository.saveAllAndFlush(klines);
+                saveToDb(klines);
             } catch (IOException e) {
                 e.printStackTrace();
             }

@@ -1,11 +1,17 @@
 package org.mjbot;
 
+import java.io.*;
 import java.net.InetAddress;
+import java.net.URI;
 import java.net.UnknownHostException;
+import java.net.http.HttpClient;
+import java.net.http.WebSocket;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
+import java.util.concurrent.CompletionStage;
 import javax.annotation.PostConstruct;
+import javax.websocket.*;
 import org.apache.commons.lang3.StringUtils;
 import org.mjbot.config.ApplicationProperties;
 import org.mjbot.config.CRLFLogConverter;
@@ -64,11 +70,63 @@ public class MjbotApp {
      *
      * @param args the command line arguments.
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws DeploymentException, IOException {
         SpringApplication app = new SpringApplication(MjbotApp.class);
         DefaultProfileUtil.addDefaultProfile(app);
         Environment env = app.run(args).getEnvironment();
         logApplicationStartup(env);
+
+        String hostname =
+            "wss://ws-api-spot.kucoin.com/?token=2neAiuYvAU61ZDXANAGAsiL4-iAExhsBXZxftpOeh_55i3Ysy2q2LEsEWU64mdzUOPusi34M_wGoSf7iNyEWJxFBnUVnEOanp8XFhYKwF9yiWEZy82HSutiYB9J6i9GjsxUuhPw3BlrzazF6ghq4L0TDqeEUUpGdSGAa2YJm0sE=.cNnxQ85QmyyRwoc8N1Aakg==";
+        WebSocket ws = HttpClient
+            .newHttpClient()
+            .newWebSocketBuilder()
+            .buildAsync(URI.create(hostname), new WebSocketClient(hostname))
+            .join();
+        while (true) {}
+    }
+
+    private static class WebSocketClient implements WebSocket.Listener {
+
+        private String url;
+
+        private WebSocketClient(String url) {
+            this.url = url;
+        }
+
+        @Override
+        public void onOpen(WebSocket webSocket) {
+            System.out.println("onOpen using subprotocol " + webSocket.getSubprotocol());
+            WebSocket.Listener.super.onOpen(webSocket);
+            String json =
+                "{\n" +
+                "    \"id\": 1545910660739,           \n" +
+                "    \"type\": \"subscribe\",\n" +
+                "    \"topic\": \"/market/candles:ETH-USDT_1min\", \n" +
+                "    \"privateChannel\": false,                      \n" +
+                "    \"response\": true                         \n" +
+                "}";
+            webSocket.sendText(json, true);
+        }
+
+        @Override
+        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+            System.out.println("onText received " + data);
+            return WebSocket.Listener.super.onText(webSocket, data, last);
+        }
+
+        @Override
+        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+            System.out.println(reason);
+            HttpClient.newHttpClient().newWebSocketBuilder().buildAsync(URI.create(url), new WebSocketClient(url)).join();
+            return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
+        }
+
+        @Override
+        public void onError(WebSocket webSocket, Throwable error) {
+            System.out.println(error.getMessage());
+            WebSocket.Listener.super.onError(webSocket, error);
+        }
     }
 
     private static void logApplicationStartup(Environment env) {
