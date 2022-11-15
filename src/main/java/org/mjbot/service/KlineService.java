@@ -1,6 +1,7 @@
 package org.mjbot.service;
 
 import com.kucoin.sdk.KucoinRestClient;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -144,9 +145,8 @@ public class KlineService {
         for (Symbol symbol : actives) {
             Kline lastKline = klineRepository.findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(symbol.getId(), "5min");
             try {
-                Thread.sleep(5000);
                 List<Kline> klines = new ArrayList<>();
-                List<List<String>> historicRates = restClient
+                List<List<String>> historicRates = kucoinRestClient
                     .historyAPI()
                     .getHistoricRates(symbol.getSymbol(), lastKline != null ? lastKline.getTime() : 0, 0, "1min");
                 historicRates.forEach(strings -> {
@@ -172,7 +172,7 @@ public class KlineService {
                     klines.add(kline);
                 });
                 klineRepository.saveAllAndFlush(klines);
-            } catch (IOException | InterruptedException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
             }
         }
