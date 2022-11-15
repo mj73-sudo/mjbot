@@ -102,7 +102,7 @@ public class MjbotApp {
                 "{\n" +
                 "    \"id\": 1545910660739,           \n" +
                 "    \"type\": \"subscribe\",\n" +
-                "    \"topic\": \"/market/candles:ETH-USDT_1min\", \n" +
+                "    \"topic\": \"/market/candles:BTC-USDT_1min\", \n" +
                 "    \"privateChannel\": false,                      \n" +
                 "    \"response\": true                         \n" +
                 "}";
@@ -118,7 +118,7 @@ public class MjbotApp {
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
             System.out.println(reason);
-            HttpClient.newHttpClient().newWebSocketBuilder().buildAsync(URI.create(url), new WebSocketClient(url)).join();
+            HttpClient.newHttpClient().newWebSocketBuilder().buildAsync(URI.create(url), this).join();
             return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
         }
 
