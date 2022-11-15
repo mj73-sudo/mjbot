@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -143,14 +144,22 @@ public class KlineService {
         for (Symbol symbol : actives) {
             Kline lastKline = klineRepository.findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(symbol.getId(), "5min");
             try {
-                Thread.sleep(100);
+                Thread.sleep(5000);
                 List<Kline> klines = new ArrayList<>();
-                try {
-                    List<List<String>> historicRates = kucoinRestClient
-                        .historyAPI()
-                        .getHistoricRates(symbol.getSymbol(), lastKline != null ? lastKline.getTime() : 0, 0, "5min");
-                    historicRates.forEach(strings -> {
-                        Kline kline = new Kline()
+                List<List<String>> historicRates = restClient
+                    .historyAPI()
+                    .getHistoricRates(symbol.getSymbol(), lastKline != null ? lastKline.getTime() : 0, 0, "1min");
+                historicRates.forEach(strings -> {
+                    Kline kline = klineRepository.findFirstByTimeAndTimeTypeAndSymbol_Id(
+                        Long.valueOf(strings.get(0)),
+                        "1min",
+                        symbol.getId()
+                    );
+                    if (kline == null) {
+                        kline = new Kline();
+                    }
+                    kline =
+                        kline
                             .time(Long.valueOf(strings.get(0)))
                             .open(strings.get(1))
                             .close(strings.get(2))
@@ -160,14 +169,10 @@ public class KlineService {
                             .turnover(strings.get(6))
                             .timeType("1min")
                             .symbol(symbol);
-                        klines.add(kline);
-                    });
-                    log.debug("insert -{}- symbol to db.", symbol.getSymbol());
-                    saveToDb(klines);
-                } catch (Exception e) {
-                    log.error(e.getMessage());
-                }
-            } catch (InterruptedException e) {
+                    klines.add(kline);
+                });
+                klineRepository.saveAllAndFlush(klines);
+            } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
             }
         }
