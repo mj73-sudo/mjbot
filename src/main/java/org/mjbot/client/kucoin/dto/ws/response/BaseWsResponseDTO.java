@@ -41,4 +41,23 @@ public class BaseWsResponseDTO {
     public void setData(Map<String, Object> data) {
         this.data = data;
     }
+
+    @Override
+    public String toString() {
+        return (
+            "BaseWsResponseDTO{" +
+            "type='" +
+            type +
+            '\'' +
+            ", topic='" +
+            topic +
+            '\'' +
+            ", subject='" +
+            subject +
+            '\'' +
+            ", data=" +
+            data +
+            '}'
+        );
+    }
 }

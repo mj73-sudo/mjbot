@@ -1,10 +1,26 @@
 package org.mjbot.service;
 
+import static org.mjbot.client.kucoin.builder.ws.KucoinWsBuilder.wsPublicToken;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kucoin.sdk.KucoinRestClient;
-import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.WebSocket;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import org.apache.commons.collections4.map.HashedMap;
+import org.mjbot.client.kucoin.builder.ObjectMapperBuilder;
+import org.mjbot.client.kucoin.builder.ws.OnMessageListener;
+import org.mjbot.client.kucoin.builder.ws.WebSocketListener;
+import org.mjbot.client.kucoin.dto.ws.request.WsRequestDTO;
+import org.mjbot.client.kucoin.dto.ws.response.BaseWsResponseDTO;
 import org.mjbot.domain.Kline;
 import org.mjbot.domain.Symbol;
 import org.mjbot.repository.KlineRepository;
@@ -15,7 +31,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -37,6 +52,8 @@ public class KlineService {
     private final SymbolRepository symbolRepository;
 
     private final KucoinRestClient kucoinRestClient;
+
+    private final Map<String, List<List<String>>> klines = new HashedMap<>();
 
     public KlineService(
         KlineRepository klineRepository,
@@ -140,8 +157,47 @@ public class KlineService {
     }
 
     //    @Scheduled(cron = "0 */5 * * * *")
+    @Scheduled(initialDelay = 1, fixedRate = Long.MAX_VALUE)
     public void getKlinesEvery5Min() {
         List<Symbol> actives = symbolRepository.findAllByActive(true);
+        ExecutorService service = Executors.newFixedThreadPool(actives.size());
+        for (Symbol symbol : actives) {
+            service.execute(() -> {
+                String hostName = "wss://ws-api-spot.kucoin.com" + "?token=" + wsPublicToken;
+                hostName = hostName.replace("endpoint", "");
+                WsRequestDTO wsRequestDTO = new WsRequestDTO();
+                wsRequestDTO.setId(Instant.now().getEpochSecond());
+                wsRequestDTO.setPrivateChannel(false);
+                wsRequestDTO.setResponse(true);
+                wsRequestDTO.setType("subscribe");
+                wsRequestDTO.setTopic("/market/candles:" + symbol.getSymbol() + "_1min");
+                WebSocket ws = HttpClient
+                    .newHttpClient()
+                    .newWebSocketBuilder()
+                    .buildAsync(
+                        URI.create(hostName),
+                        new WebSocketListener(
+                            hostName,
+                            wsRequestDTO,
+                            text -> {
+                                ObjectMapper instance = ObjectMapperBuilder.getInstance();
+                                BaseWsResponseDTO baseWsResponseDTO = instance.readValue(text, BaseWsResponseDTO.class);
+                                if (klines.containsKey(symbol.getSymbol())) {
+                                    List<List<String>> candles = klines.get(symbol.getSymbol());
+                                    candles.add((List<String>) baseWsResponseDTO.getData().get("candles"));
+                                } else {
+                                    List<List<String>> candles = new ArrayList<>();
+                                    candles.add((List<String>) baseWsResponseDTO.getData().get("candles"));
+                                    klines.put(symbol.getSymbol(), candles);
+                                }
+                                log.debug(baseWsResponseDTO.toString());
+                            }
+                        )
+                    )
+                    .join();
+            });
+        }
+        /*  List<Symbol> actives = symbolRepository.findAllByActive(true);
         for (Symbol symbol : actives) {
             Kline lastKline = klineRepository.findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(symbol.getId(), "5min");
             try {
@@ -175,7 +231,7 @@ public class KlineService {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }
+        }*/
     }
 
     @Async

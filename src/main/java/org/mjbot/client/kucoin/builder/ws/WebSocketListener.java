@@ -17,9 +17,12 @@ public class WebSocketListener implements WebSocket.Listener {
     private final String url;
     private final WsRequestDTO request;
 
-    public WebSocketListener(String url, WsRequestDTO request) {
+    private final OnMessageListener onMessageListener;
+
+    public WebSocketListener(String url, WsRequestDTO request, OnMessageListener onMessageListener) {
         this.url = url;
         this.request = request;
+        this.onMessageListener = onMessageListener;
     }
 
     @Override
@@ -36,6 +39,7 @@ public class WebSocketListener implements WebSocket.Listener {
 
     @Override
     public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+        onMessage(data.toString());
         return WebSocket.Listener.super.onText(webSocket, data, last);
     }
 
@@ -48,5 +52,15 @@ public class WebSocketListener implements WebSocket.Listener {
     @Override
     public void onError(WebSocket webSocket, Throwable error) {
         WebSocket.Listener.super.onError(webSocket, error);
+    }
+
+    private void onMessage(String text) {
+        if (text.contains("message")) {
+            try {
+                onMessageListener.getMessage(text);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 }

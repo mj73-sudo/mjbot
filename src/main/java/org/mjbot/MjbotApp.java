@@ -1,6 +1,5 @@
 package org.mjbot;
 
-import static org.mjbot.client.kucoin.builder.ws.KucoinWsBuilder.wsEndpointUrl;
 import static org.mjbot.client.kucoin.builder.ws.KucoinWsBuilder.wsPublicToken;
 
 import java.io.*;
@@ -81,72 +80,6 @@ public class MjbotApp {
         DefaultProfileUtil.addDefaultProfile(app);
         Environment env = app.run(args).getEnvironment();
         logApplicationStartup(env);
-
-        String hostName = "wss://ws-api-spot.kucoin.com" + "?token=" + wsPublicToken;
-        hostName = hostName.replace("endpoint", "");
-        WsRequestDTO wsRequestDTO = new WsRequestDTO();
-        wsRequestDTO.setId(Instant.now().getEpochSecond());
-        wsRequestDTO.setPrivateChannel(false);
-        wsRequestDTO.setResponse(true);
-        wsRequestDTO.setType("subscribe");
-        wsRequestDTO.setTopic("/market/candles:BTC-USDT_1min");
-        WebSocket ws = HttpClient
-            .newHttpClient()
-            .newWebSocketBuilder()
-            .buildAsync(URI.create(hostName), new WebSocketListener(hostName, wsRequestDTO))
-            .join();
-        while (true) {}
-        /* String hostname =
-            "wss://ws-api-spot.kucoin.com/?token=2neAiuYvAU61ZDXANAGAsiL4-iAExhsBXZxftpOeh_55i3Ysy2q2LEsEWU64mdzUOPusi34M_wGoSf7iNyEWJxFBnUVnEOanp8XFhYKwF9yiWEZy82HSutiYB9J6i9GjsxUuhPw3BlrzazF6ghq4L0TDqeEUUpGdSGAa2YJm0sE=.cNnxQ85QmyyRwoc8N1Aakg==";
-        WebSocket ws = HttpClient
-            .newHttpClient()
-            .newWebSocketBuilder()
-            .buildAsync(URI.create(hostname), new WebSocketClient(hostname))
-            .join();
-        while (true) {}*/
-    }
-
-    private static class WebSocketClient implements WebSocket.Listener {
-
-        private String url;
-
-        private WebSocketClient(String url) {
-            this.url = url;
-        }
-
-        @Override
-        public void onOpen(WebSocket webSocket) {
-            System.out.println("onOpen using subprotocol " + webSocket.getSubprotocol());
-            WebSocket.Listener.super.onOpen(webSocket);
-            String json =
-                "{\n" +
-                "    \"id\": 1545910660739,           \n" +
-                "    \"type\": \"subscribe\",\n" +
-                "    \"topic\": \"/market/candles:BTC-USDT_1min\", \n" +
-                "    \"privateChannel\": false,                      \n" +
-                "    \"response\": true                         \n" +
-                "}";
-            webSocket.sendText(json, true);
-        }
-
-        @Override
-        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-            System.out.println("onText received " + data);
-            return WebSocket.Listener.super.onText(webSocket, data, last);
-        }
-
-        @Override
-        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-            System.out.println(reason);
-            HttpClient.newHttpClient().newWebSocketBuilder().buildAsync(URI.create(url), this).join();
-            return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
-        }
-
-        @Override
-        public void onError(WebSocket webSocket, Throwable error) {
-            System.out.println(error.getMessage());
-            WebSocket.Listener.super.onError(webSocket, error);
-        }
     }
 
     private static void logApplicationStartup(Environment env) {
