@@ -20,6 +20,7 @@ logging:
     org.hibernate.SQL: DEBUG
     org.mjbot: DEBUG
     jdk.internal.httpclient: off
+    jdk.event.security: off
 
 spring:
   devtools:
@@ -106,3 +107,7 @@ jhipster:
 # ===================================================================
 
 # application:
+kucoin:
+  base-url: https://openapi-v2.kucoin.com
+  public-token-endpoint-url: /api/v1/bullet-public
+  socket-endpoint-url: wss://push1-v2.kucoin.com/endpoint

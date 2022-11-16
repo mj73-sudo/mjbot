@@ -211,3 +211,7 @@ jhipster:
 # ===================================================================
 
 # application:
+kucoin:
+  base-url: https://openapi-v2.kucoin.com
+  public-token-endpoint-url: /api/v1/bullet-public
+  socket-endpoint-url: wss://push1-v2.kucoin.com/endpoint

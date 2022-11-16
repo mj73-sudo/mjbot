@@ -1,11 +1,15 @@
 package org.mjbot;
 
+import static org.mjbot.client.kucoin.builder.ws.KucoinWsBuilder.wsEndpointUrl;
+import static org.mjbot.client.kucoin.builder.ws.KucoinWsBuilder.wsPublicToken;
+
 import java.io.*;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
@@ -13,6 +17,8 @@ import java.util.concurrent.CompletionStage;
 import javax.annotation.PostConstruct;
 import javax.websocket.*;
 import org.apache.commons.lang3.StringUtils;
+import org.mjbot.client.kucoin.builder.ws.WebSocketListener;
+import org.mjbot.client.kucoin.dto.ws.request.WsRequestDTO;
 import org.mjbot.config.ApplicationProperties;
 import org.mjbot.config.CRLFLogConverter;
 import org.slf4j.Logger;
@@ -76,14 +82,28 @@ public class MjbotApp {
         Environment env = app.run(args).getEnvironment();
         logApplicationStartup(env);
 
-        String hostname =
+        String hostName = "wss://ws-api-spot.kucoin.com" + "?token=" + wsPublicToken;
+        hostName = hostName.replace("endpoint", "");
+        WsRequestDTO wsRequestDTO = new WsRequestDTO();
+        wsRequestDTO.setId(Instant.now().getEpochSecond());
+        wsRequestDTO.setPrivateChannel(false);
+        wsRequestDTO.setResponse(true);
+        wsRequestDTO.setType("subscribe");
+        wsRequestDTO.setTopic("/market/candles:BTC-USDT_1min");
+        WebSocket ws = HttpClient
+            .newHttpClient()
+            .newWebSocketBuilder()
+            .buildAsync(URI.create(hostName), new WebSocketListener(hostName, wsRequestDTO))
+            .join();
+        while (true) {}
+        /* String hostname =
             "wss://ws-api-spot.kucoin.com/?token=2neAiuYvAU61ZDXANAGAsiL4-iAExhsBXZxftpOeh_55i3Ysy2q2LEsEWU64mdzUOPusi34M_wGoSf7iNyEWJxFBnUVnEOanp8XFhYKwF9yiWEZy82HSutiYB9J6i9GjsxUuhPw3BlrzazF6ghq4L0TDqeEUUpGdSGAa2YJm0sE=.cNnxQ85QmyyRwoc8N1Aakg==";
         WebSocket ws = HttpClient
             .newHttpClient()
             .newWebSocketBuilder()
             .buildAsync(URI.create(hostname), new WebSocketClient(hostname))
             .join();
-        while (true) {}
+        while (true) {}*/
     }
 
     private static class WebSocketClient implements WebSocket.Listener {
