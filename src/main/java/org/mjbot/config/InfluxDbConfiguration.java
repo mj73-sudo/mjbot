@@ -2,6 +2,7 @@ package org.mjbot.config;
 
 import org.influxdb.InfluxDB;
 import org.influxdb.InfluxDBFactory;
+import org.influxdb.dto.BatchPoints;
 import org.influxdb.dto.Pong;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -34,6 +35,13 @@ public class InfluxDbConfiguration {
         if (ping.getVersion().equalsIgnoreCase("unknown")) {
             return null;
         }
+        influxDB.createDatabase("mjbot");
+        influxDB.createRetentionPolicy("defaultPolicy", "mjbot", "1d", 1, true);
+        //        influxDB.setLogLevel(InfluxDB.LogLevel.BASIC);
+        //        influxDB.setDatabase("mjbot");
+        //        influxDB.setRetentionPolicy("defaultPolicy");
+        influxDB = influxDB.setLogLevel(InfluxDB.LogLevel.BASIC).setDatabase("mjbot");
+
         return influxDB;
     }
 }

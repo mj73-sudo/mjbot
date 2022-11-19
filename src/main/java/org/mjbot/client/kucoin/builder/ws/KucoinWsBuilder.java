@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
-//@Configuration
+@Configuration
 public class KucoinWsBuilder {
 
     public static String wsEndpointUrl;

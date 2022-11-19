@@ -15,4 +15,6 @@ public interface SymbolRepository extends JpaRepository<Symbol, Long>, JpaSpecif
     boolean existsAllBySymbol(String symbol);
 
     List<Symbol> findAllByActive(Boolean active);
+
+    Symbol findFirstBySymbol(String symbol);
 }
