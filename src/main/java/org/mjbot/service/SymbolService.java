@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -118,7 +119,7 @@ public class SymbolService {
         symbolRepository.deleteById(id);
     }
 
-    //    @Scheduled(initialDelay = 1, fixedRate = 1000 * 60 * 60 * 24 * 7)
+    @Scheduled(initialDelay = 1, fixedRate = 1000 * 60 * 60 * 24 * 7)
     public void getSymbols() throws IOException {
         List<SymbolResponse> response = kucoinRestClient.symbolAPI().getSymbols();
         List<Symbol> symbols = response

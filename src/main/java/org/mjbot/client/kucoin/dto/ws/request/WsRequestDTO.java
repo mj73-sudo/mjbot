@@ -48,4 +48,24 @@ public class WsRequestDTO {
     public void setTopic(String topic) {
         this.topic = topic;
     }
+
+    @Override
+    public String toString() {
+        return (
+            "WsRequestDTO{" +
+            "id=" +
+            id +
+            ", type='" +
+            type +
+            '\'' +
+            ", topic='" +
+            topic +
+            '\'' +
+            ", privateChannel=" +
+            privateChannel +
+            ", response=" +
+            response +
+            '}'
+        );
+    }
 }

@@ -9,17 +9,13 @@ import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.commons.collections4.map.HashedMap;
 import org.influxdb.InfluxDB;
-import org.influxdb.dto.BatchPoints;
 import org.influxdb.dto.Point;
 import org.mjbot.client.kucoin.builder.ObjectMapperBuilder;
 import org.mjbot.client.kucoin.builder.ws.WebSocketListener;
@@ -58,7 +54,6 @@ public class KlineService {
     private final KucoinRestClient kucoinRestClient;
 
     private final Map<String, List<List<String>>> klines = new HashedMap<>();
-    private final Map<String, List<Point>> points = new HashedMap<>();
 
     private final InfluxDB influxDB;
 
@@ -166,10 +161,11 @@ public class KlineService {
     }
 
     //    @Scheduled(cron = "0 */5 * * * *")
-    @Scheduled(initialDelay = 1, fixedRate = Long.MAX_VALUE)
+    @Scheduled(initialDelay = 10000, fixedRate = Long.MAX_VALUE)
     public void getKlinesEvery5Min() {
         List<Symbol> actives = symbolRepository.findAllByActive(true);
-        ExecutorService service = Executors.newFixedThreadPool(actives.size());
+        //        ExecutorService service = Executors.newFixedThreadPool(actives.size());
+        ExecutorService service = Executors.newCachedThreadPool();
         for (Symbol symbol : actives) {
             service.execute(() -> {
                 String hostName = "wss://ws-api-spot.kucoin.com" + "?token=" + wsPublicToken;
@@ -195,42 +191,11 @@ public class KlineService {
                                     List<List<String>> candles = klines.get(symbol.getSymbol());
                                     candles.add((List<String>) baseWsResponseDTO.getData().get("candles"));
                                 } else {
-                                    List<List<String>> candles = new ArrayList<>();
+                                    List<List<String>> candles = Collections.synchronizedList(new ArrayList<>());
                                     candles.add((List<String>) baseWsResponseDTO.getData().get("candles"));
                                     klines.put(symbol.getSymbol(), candles);
                                 }
-
-                                if (points.containsKey(symbol.getSymbol())) {
-                                    List<Point> candles = points.get(symbol.getSymbol());
-                                    List<String> strings = (List<String>) baseWsResponseDTO.getData().get("candles");
-                                    Point point = Point
-                                        .measurement("memory")
-                                        .time(Long.valueOf(strings.get(0)), TimeUnit.MILLISECONDS)
-                                        .addField("open", strings.get(1))
-                                        .addField("close", strings.get(2))
-                                        .addField("high", strings.get(3))
-                                        .addField("low", strings.get(4))
-                                        .addField("volume", strings.get(5))
-                                        .addField("turnover", strings.get(6))
-                                        .build();
-                                    candles.add(point);
-                                } else {
-                                    List<Point> candles = new ArrayList<>();
-                                    List<String> strings = (List<String>) baseWsResponseDTO.getData().get("candles");
-                                    Point point = Point
-                                        .measurement("memory")
-                                        .time(Long.valueOf(strings.get(0)), TimeUnit.MILLISECONDS)
-                                        .addField("open", strings.get(1))
-                                        .addField("close", strings.get(2))
-                                        .addField("high", strings.get(3))
-                                        .addField("low", strings.get(4))
-                                        .addField("volume", strings.get(5))
-                                        .addField("turnover", strings.get(6))
-                                        .build();
-                                    candles.add(point);
-                                    points.put(symbol.getSymbol(), candles);
-                                }
-                                //                    log.debug(baseWsResponseDTO.toString());
+                                log.debug(text);
                             }
                         )
                     )
@@ -239,9 +204,9 @@ public class KlineService {
         }
     }
 
-    @Scheduled(cron = "10 * * * * *")
+    @Scheduled(cron = "2 * * * * *")
     public void saveCandleEvery1Min() {
-        BatchPoints batchPoints = BatchPoints.database("mjbot").retentionPolicy("defaultPolicy").build();
+        List<Kline> klineList = new ArrayList<>();
         ZonedDateTime preCandle = ZonedDateTime.now();
         preCandle = preCandle.minusSeconds(preCandle.getSecond());
         preCandle = preCandle.minusNanos(preCandle.getNano());
@@ -270,15 +235,27 @@ public class KlineService {
                         .addField("volume", strings.get(5))
                         .addField("turnover", strings.get(6))
                         .build();
-                    influxDB.setDatabase("mjbot").write(point);
-                    //                batchPoints.point(point);
-                }
-            });
-        //        influxDB.setDatabase("mjbot").write(batchPoints);
-    }
+                    Kline kline = new Kline()
+                        .time(Long.valueOf(strings.get(0)))
+                        .open(strings.get(1))
+                        .close(strings.get(2))
+                        .high(strings.get(3))
+                        .low(strings.get(4))
+                        .volume(strings.get(5))
+                        .turnover(strings.get(6))
+                        .timeType("1min")
+                        .symbol(symbolRepository.findFirstBySymbol(map.getKey()));
 
-    @Async
-    public void saveToDb(List<Kline> klines) {
-        klineRepository.saveAllAndFlush(klines);
+                    klineList.add(kline);
+                    influxDB.setDatabase("mjbot").write(point);
+                }
+                List<List<String>> newCandles = map
+                    .getValue()
+                    .stream()
+                    .filter(strings -> !strings.get(0).equalsIgnoreCase(String.valueOf(preTimeStamp)))
+                    .collect(Collectors.toList());
+                map.setValue(Collections.synchronizedList(newCandles));
+            });
+        klineRepository.saveAll(klineList);
     }
 }
