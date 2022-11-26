@@ -40,7 +40,7 @@ public class InfluxDbConfiguration {
         //        influxDB.setLogLevel(InfluxDB.LogLevel.BASIC);
         //        influxDB.setDatabase("mjbot");
         //        influxDB.setRetentionPolicy("defaultPolicy");
-        influxDB = influxDB.setLogLevel(InfluxDB.LogLevel.BASIC).setDatabase("mjbot");
+        influxDB = influxDB.setLogLevel(InfluxDB.LogLevel.NONE).setDatabase("mjbot");
 
         return influxDB;
     }

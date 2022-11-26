@@ -34,8 +34,8 @@ spring:
   datasource:
     type: com.zaxxer.hikari.HikariDataSource
     url: jdbc:postgresql://localhost:5432/mjbot
-    username: mjbot
-    password:
+    username: postgres
+    password: 90630690
     hikari:
       poolName: Hikari
       auto-commit: false
@@ -124,3 +124,7 @@ jhipster:
 # ===================================================================
 
 # application:
+kucoin:
+  base-url: https://openapi-v2.kucoin.com
+  public-token-endpoint-url: /api/v1/bullet-public
+  socket-endpoint-url: wss://push1-v2.kucoin.com/endpoint

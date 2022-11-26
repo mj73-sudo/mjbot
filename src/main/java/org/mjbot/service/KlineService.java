@@ -195,7 +195,7 @@ public class KlineService {
                                     candles.add((List<String>) baseWsResponseDTO.getData().get("candles"));
                                     klines.put(symbol.getSymbol(), candles);
                                 }
-                                log.debug(text);
+                                //                                log.debug(text);
                             }
                         )
                     )
