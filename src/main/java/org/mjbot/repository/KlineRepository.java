@@ -47,5 +47,5 @@ public interface KlineRepository extends JpaRepository<Kline, Long>, JpaSpecific
         "join kline.symbol symbol " +
         "where symbol.active=true and kline.timeType=:timeType and kline.time >= :fromDate"
     )
-    List<Kline> getFiveMinutesRecords(@Param("fromDate") Long timestamp, @Param("timeType") String timeType);
+    List<Kline> getListFromDateAndTimeType(@Param("fromDate") Long timestamp, @Param("timeType") String timeType);
 }
