@@ -41,4 +41,11 @@ public interface KlineRepository extends JpaRepository<Kline, Long>, JpaSpecific
     Kline findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(Long symbolId, String timeType);
 
     Kline findFirstByTimeAndTimeTypeAndSymbol_Id(Long time, String timeType, Long symbolId);
+
+    @Query(
+        "select kline from Kline kline " +
+        "join kline.symbol symbol " +
+        "where symbol.active=true and kline.timeType=:timeType and kline.time >= :fromDate"
+    )
+    List<Kline> getFiveMinutesRecords(@Param("fromDate") Long timestamp, @Param("timeType") String timeType);
 }

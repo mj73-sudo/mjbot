@@ -31,7 +31,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -256,6 +255,70 @@ public class KlineService {
                     .collect(Collectors.toList());
                 map.setValue(Collections.synchronizedList(newCandles));
             });
+        klineRepository.saveAll(klineList);
+    }
+
+    @Scheduled(cron = "10 */5 * * * *")
+    public void saveCandleEvery5Min() {
+        List<Kline> klineList = new ArrayList<>();
+        ZonedDateTime preCandle = ZonedDateTime.now();
+        preCandle = preCandle.minusSeconds(preCandle.getSecond());
+        preCandle = preCandle.minusNanos(preCandle.getNano());
+        preCandle = preCandle.minusMinutes(5);
+        long preTimeStamp = preCandle.toEpochSecond();
+        List<Kline> fiveMinutesRecords = klineRepository.getFiveMinutesRecords(preTimeStamp, "1min");
+        Map<Symbol, List<Kline>> listMap = fiveMinutesRecords.stream().collect(Collectors.groupingBy(Kline::getSymbol));
+
+        ZonedDateTime nowCandle = ZonedDateTime.now();
+        nowCandle = nowCandle.minusSeconds(preCandle.getSecond());
+        nowCandle = nowCandle.minusNanos(preCandle.getNano());
+
+        ZonedDateTime finalNowCandle = nowCandle;
+        listMap.forEach((symbol, klines) -> {
+            Kline kline = new Kline();
+            double turnOver = 0;
+            double volume = 0;
+            String open;
+            String close;
+            String high = null;
+            String low = null;
+            Kline firstKline = klines.get(0);
+            Kline lastKline = klines.get(klines.size() - 1);
+
+            open = firstKline.getOpen();
+            close = lastKline.getClose();
+
+            for (Kline temp : klines) {
+                turnOver += Double.parseDouble(temp.getTurnover());
+                volume += Double.parseDouble(temp.getVolume());
+
+                if (high == null && low == null) {
+                    high = temp.getHigh();
+                    low = temp.getLow();
+                    continue;
+                }
+                double tempHigh = Double.parseDouble(temp.getHigh());
+                double tempLow = Double.parseDouble(temp.getLow());
+                if (Double.parseDouble(high) < tempHigh) {
+                    high = temp.getHigh();
+                }
+                if (Double.parseDouble(low) > tempLow) {
+                    low = temp.getLow();
+                }
+            }
+
+            kline.setTime(finalNowCandle.toEpochSecond());
+            kline.setClose(close);
+            kline.setOpen(open);
+            kline.setHigh(high);
+            kline.setLow(low);
+            kline.setSymbol(symbol);
+            kline.setTimeType("5min");
+            kline.setVolume(String.valueOf(volume));
+            kline.setTurnover(String.valueOf(turnOver));
+
+            klineList.add(kline);
+        });
         klineRepository.saveAll(klineList);
     }
 }
