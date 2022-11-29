@@ -54,16 +54,18 @@ public class WebSocketListener implements WebSocket.Listener {
 
     @Override
     public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-        log.error("-----------------------on close {}--------------------------------", request.getTopic());
+        //        log.error("-----------------------on close {}--------------------------------", request.getTopic());
+        //        log.error(reason);
         HttpClient.newHttpClient().newWebSocketBuilder().buildAsync(URI.create(url), this).join();
         return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
     }
 
     @Override
     public void onError(WebSocket webSocket, Throwable error) {
-        log.error("---------------------------on error {}--------------------------------", request.getTopic());
-        HttpClient.newHttpClient().newWebSocketBuilder().buildAsync(URI.create(url), this).join();
+        //        log.error("---------------------------on error {}--------------------------------", request.getTopic());
+        //        log.error(error.toString());
         WebSocket.Listener.super.onError(webSocket, error);
+        HttpClient.newHttpClient().newWebSocketBuilder().buildAsync(URI.create(url), this).join();
     }
 
     private void onMessage(String text) {

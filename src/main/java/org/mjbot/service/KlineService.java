@@ -1,26 +1,16 @@
 package org.mjbot.service;
 
-import static org.mjbot.client.kucoin.builder.ws.KucoinWsBuilder.wsPublicToken;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kucoin.sdk.KucoinRestClient;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.WebSocket;
-import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 import org.apache.commons.collections4.map.HashedMap;
-import org.influxdb.InfluxDB;
-import org.influxdb.dto.Point;
-import org.mjbot.client.kucoin.builder.ObjectMapperBuilder;
-import org.mjbot.client.kucoin.builder.ws.WebSocketListener;
-import org.mjbot.client.kucoin.dto.ws.request.WsRequestDTO;
-import org.mjbot.client.kucoin.dto.ws.response.BaseWsResponseDTO;
+import org.mjbot.client.kucoin.builder.rest.KucoinRestBuilder;
+import org.mjbot.client.kucoin.dto.rest.request.KlineRequestDTO;
 import org.mjbot.domain.Kline;
 import org.mjbot.domain.Symbol;
 import org.mjbot.repository.KlineRepository;
@@ -49,25 +39,21 @@ public class KlineService {
     private final KlineMapper klineMapper;
 
     private final SymbolRepository symbolRepository;
-
-    private final KucoinRestClient kucoinRestClient;
-
-    private final Map<String, List<List<String>>> klines = new HashedMap<>();
-
-    private final InfluxDB influxDB;
+    private final KucoinRestBuilder kucoinRestBuilder;
+    int er;
+    int suc;
+    private ConcurrentHashMap<String, CopyOnWriteArrayList<KlineRequestDTO>> failedRequestMaps = new ConcurrentHashMap<>();
 
     public KlineService(
         KlineRepository klineRepository,
         KlineMapper klineMapper,
         SymbolRepository symbolRepository,
-        KucoinRestClient kucoinRestClient,
-        InfluxDB influxDB
+        KucoinRestBuilder kucoinRestBuilder
     ) {
         this.klineRepository = klineRepository;
         this.klineMapper = klineMapper;
         this.symbolRepository = symbolRepository;
-        this.kucoinRestClient = kucoinRestClient;
-        this.influxDB = influxDB;
+        this.kucoinRestBuilder = kucoinRestBuilder;
     }
 
     /**
@@ -159,230 +145,218 @@ public class KlineService {
         klineRepository.deleteById(id);
     }
 
-    //    @Scheduled(cron = "0 */5 * * * *")
-    @Scheduled(initialDelay = 10000, fixedRate = Long.MAX_VALUE)
-    public void getKlinesEvery5Min() {
-        List<Symbol> actives = symbolRepository.findAllByActive(true);
-        //        ExecutorService service = Executors.newFixedThreadPool(actives.size());
-        ExecutorService service = Executors.newCachedThreadPool();
-        for (Symbol symbol : actives) {
-            service.execute(() -> {
-                String hostName = "wss://ws-api-spot.kucoin.com" + "?token=" + wsPublicToken;
-                hostName = hostName.replace("endpoint", "");
-                WsRequestDTO wsRequestDTO = new WsRequestDTO();
-                wsRequestDTO.setId(Instant.now().getEpochSecond());
-                wsRequestDTO.setPrivateChannel(false);
-                wsRequestDTO.setResponse(true);
-                wsRequestDTO.setType("subscribe");
-                wsRequestDTO.setTopic("/market/candles:" + symbol.getSymbol() + "_1min");
-                WebSocket ws = HttpClient
-                    .newHttpClient()
-                    .newWebSocketBuilder()
-                    .buildAsync(
-                        URI.create(hostName),
-                        new WebSocketListener(
-                            hostName,
-                            wsRequestDTO,
-                            text -> {
-                                ObjectMapper instance = ObjectMapperBuilder.getInstance();
-                                BaseWsResponseDTO baseWsResponseDTO = instance.readValue(text, BaseWsResponseDTO.class);
-                                if (klines.containsKey(symbol.getSymbol())) {
-                                    List<List<String>> candles = klines.get(symbol.getSymbol());
-                                    candles.add((List<String>) baseWsResponseDTO.getData().get("candles"));
-                                } else {
-                                    List<List<String>> candles = Collections.synchronizedList(new ArrayList<>());
-                                    candles.add((List<String>) baseWsResponseDTO.getData().get("candles"));
-                                    klines.put(symbol.getSymbol(), candles);
-                                }
-                                //                                log.debug(text);
-                            }
-                        )
-                    )
-                    .join();
-            });
-        }
-    }
-
     @Scheduled(cron = "2 * * * * *")
-    public void saveCandleEvery1Min() {
-        List<Kline> klineList = new ArrayList<>();
-        ZonedDateTime preCandle = ZonedDateTime.now();
-        preCandle = preCandle.minusSeconds(preCandle.getSecond());
-        preCandle = preCandle.minusNanos(preCandle.getNano());
-        preCandle = preCandle.minusMinutes(1);
+    public void getKlineFromServer() {
+        ZonedDateTime now = ZonedDateTime.now();
+        now = now.minusNanos(now.getNano());
+        now = now.minusSeconds(now.getSecond());
+        ZonedDateTime preOneMin = now.minusMinutes(1);
 
-        long preTimeStamp = preCandle.toEpochSecond();
+        long time = now.toEpochSecond();
+        long preTime = preOneMin.toEpochSecond();
 
-        klines
-            .entrySet()
-            .forEach(map -> {
-                Symbol symbol = symbolRepository.findFirstBySymbol(map.getKey());
-                List<List<String>> candles = map
-                    .getValue()
-                    .stream()
-                    .filter(strings -> strings.get(0).equalsIgnoreCase(String.valueOf(preTimeStamp)))
-                    .collect(Collectors.toList());
-                if (!candles.isEmpty()) {
-                    List<String> strings = candles.get(candles.size() - 1);
-                    Point point = Point
-                        .measurement(symbol.getSymbol())
-                        .time(Long.valueOf(strings.get(0)), TimeUnit.MILLISECONDS)
-                        .addField("open", strings.get(1))
-                        .addField("close", strings.get(2))
-                        .addField("high", strings.get(3))
-                        .addField("low", strings.get(4))
-                        .addField("volume", strings.get(5))
-                        .addField("turnover", strings.get(6))
-                        .build();
-                    Kline kline = new Kline()
-                        .time(Long.valueOf(strings.get(0)))
-                        .open(strings.get(1))
-                        .close(strings.get(2))
-                        .high(strings.get(3))
-                        .low(strings.get(4))
-                        .volume(strings.get(5))
-                        .turnover(strings.get(6))
-                        .timeType("1min")
-                        .symbol(symbolRepository.findFirstBySymbol(map.getKey()));
+        List<Symbol> active = symbolRepository.findAllByActive(true);
+        for (Symbol symbol : active) {
+            KlineRequestDTO request = new KlineRequestDTO()
+                .setSymbol(symbol.getSymbol())
+                .setType("1min")
+                .setStartAt(preTime)
+                .setEndAt(time);
+            try {
+                List<List<String>> klines = kucoinRestBuilder.getKline(request, new HashedMap<>());
+                if (!klines.isEmpty()) {
+                    klines.forEach(strings -> {
+                        Kline kline = new Kline()
+                            .time(Long.valueOf(strings.get(0)))
+                            .open(strings.get(1))
+                            .close(strings.get(2))
+                            .high(strings.get(3))
+                            .low(strings.get(4))
+                            .volume(strings.get(5))
+                            .turnover(strings.get(6))
+                            .timeType("1min")
+                            .symbol(symbol);
+                        klineRepository.save(kline);
+                    });
+                    suc++;
+                } else {
+                    Kline lastKline = klineRepository.findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(symbol.getId(), "1min");
+                    Kline kline = klineMapper.clone(lastKline);
+                    kline.setId(null);
+                    kline.setSymbol(symbol);
+                    kline.setTime(preTime);
 
-                    klineList.add(kline);
-                    influxDB.setDatabase("mjbot").write(point);
+                    klineRepository.save(kline);
                 }
-                List<List<String>> newCandles = map
-                    .getValue()
-                    .stream()
-                    .filter(strings -> !strings.get(0).equalsIgnoreCase(String.valueOf(preTimeStamp)))
-                    .collect(Collectors.toList());
-                map.setValue(Collections.synchronizedList(newCandles));
-            });
-        klineRepository.saveAll(klineList);
-    }
-
-    @Scheduled(cron = "10 */5 * * * *")
-    public void saveCandleEvery5Min() {
-        List<Kline> klineList = new ArrayList<>();
-        ZonedDateTime preCandle = ZonedDateTime.now();
-        preCandle = preCandle.minusSeconds(preCandle.getSecond());
-        preCandle = preCandle.minusNanos(preCandle.getNano());
-        preCandle = preCandle.minusMinutes(5);
-        long preTimeStamp = preCandle.toEpochSecond();
-        List<Kline> fiveMinutesRecords = klineRepository.getListFromDateAndTimeType(preTimeStamp, "1min");
-        Map<Symbol, List<Kline>> listMap = fiveMinutesRecords.stream().collect(Collectors.groupingBy(Kline::getSymbol));
-
-        ZonedDateTime nowCandle = ZonedDateTime.now();
-        nowCandle = nowCandle.minusSeconds(preCandle.getSecond());
-        nowCandle = nowCandle.minusNanos(preCandle.getNano());
-
-        ZonedDateTime finalNowCandle = nowCandle;
-        listMap.forEach((symbol, klines) -> {
-            Kline kline = new Kline();
-            double turnOver = 0;
-            double volume = 0;
-            String open;
-            String close;
-            String high = null;
-            String low = null;
-            Kline firstKline = klines.get(0);
-            Kline lastKline = klines.get(klines.size() - 1);
-
-            open = firstKline.getOpen();
-            close = lastKline.getClose();
-
-            for (Kline temp : klines) {
-                turnOver += Double.parseDouble(temp.getTurnover());
-                volume += Double.parseDouble(temp.getVolume());
-
-                if (high == null && low == null) {
-                    high = temp.getHigh();
-                    low = temp.getLow();
-                    continue;
-                }
-                double tempHigh = Double.parseDouble(temp.getHigh());
-                double tempLow = Double.parseDouble(temp.getLow());
-                if (Double.parseDouble(high) < tempHigh) {
-                    high = temp.getHigh();
-                }
-                if (Double.parseDouble(low) > tempLow) {
-                    low = temp.getLow();
+            } catch (Exception e) {
+                er++;
+                if (failedRequestMaps.containsKey(symbol.getSymbol())) {
+                    List<KlineRequestDTO> klineRequestDTOS = failedRequestMaps.get(symbol.getSymbol());
+                    klineRequestDTOS.add(request);
+                } else {
+                    CopyOnWriteArrayList<KlineRequestDTO> klineRequestDTOS = new CopyOnWriteArrayList<>();
+                    klineRequestDTOS.add(request);
+                    failedRequestMaps.put(symbol.getSymbol(), klineRequestDTOS);
                 }
             }
-
-            kline.setTime(finalNowCandle.toEpochSecond());
-            kline.setClose(close);
-            kline.setOpen(open);
-            kline.setHigh(high);
-            kline.setLow(low);
-            kline.setSymbol(symbol);
-            kline.setTimeType("5min");
-            kline.setVolume(String.valueOf(volume));
-            kline.setTurnover(String.valueOf(turnOver));
-
-            klineList.add(kline);
-        });
-        klineRepository.saveAll(klineList);
+        }
+        log.debug(String.valueOf(suc));
+        log.debug(String.valueOf(er));
     }
 
-    @Scheduled(cron = "10 */55 * * * *")
-    public void saveCandleEvery15Min() {
-        List<Kline> klineList = new ArrayList<>();
-        ZonedDateTime preCandle = ZonedDateTime.now();
-        preCandle = preCandle.minusSeconds(preCandle.getSecond());
-        preCandle = preCandle.minusNanos(preCandle.getNano());
-        preCandle = preCandle.minusMinutes(15);
-        long preTimeStamp = preCandle.toEpochSecond();
-        List<Kline> fiveMinutesRecords = klineRepository.getListFromDateAndTimeType(preTimeStamp, "1min");
-        Map<Symbol, List<Kline>> listMap = fiveMinutesRecords.stream().collect(Collectors.groupingBy(Kline::getSymbol));
+    @Scheduled(cron = "2 */5 * * * *")
+    public void getKlineFromServer5Min() {
+        ZonedDateTime now = ZonedDateTime.now();
+        now = now.minusNanos(now.getNano());
+        now = now.minusSeconds(now.getSecond());
+        ZonedDateTime preFiveMin = now.minusMinutes(5);
 
-        ZonedDateTime nowCandle = ZonedDateTime.now();
-        nowCandle = nowCandle.minusSeconds(preCandle.getSecond());
-        nowCandle = nowCandle.minusNanos(preCandle.getNano());
+        long time = now.toEpochSecond();
+        long preTime = preFiveMin.toEpochSecond();
 
-        ZonedDateTime finalNowCandle = nowCandle;
-        listMap.forEach((symbol, klines) -> {
-            Kline kline = new Kline();
-            double turnOver = 0;
-            double volume = 0;
-            String open;
-            String close;
-            String high = null;
-            String low = null;
-            Kline firstKline = klines.get(0);
-            Kline lastKline = klines.get(klines.size() - 1);
+        List<Symbol> active = symbolRepository.findAllByActive(true);
+        for (Symbol symbol : active) {
+            KlineRequestDTO request = new KlineRequestDTO()
+                .setSymbol(symbol.getSymbol())
+                .setType("5min")
+                .setStartAt(preTime)
+                .setEndAt(time);
+            try {
+                List<List<String>> klines = kucoinRestBuilder.getKline(request, new HashedMap<>());
+                if (!klines.isEmpty()) {
+                    klines.forEach(strings -> {
+                        Kline kline = new Kline()
+                            .time(Long.valueOf(strings.get(0)))
+                            .open(strings.get(1))
+                            .close(strings.get(2))
+                            .high(strings.get(3))
+                            .low(strings.get(4))
+                            .volume(strings.get(5))
+                            .turnover(strings.get(6))
+                            .timeType("5min")
+                            .symbol(symbol);
+                        klineRepository.save(kline);
+                    });
+                    suc++;
+                } else {
+                    Kline lastKline = klineRepository.findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(symbol.getId(), "5min");
+                    Kline kline = klineMapper.clone(lastKline);
+                    kline.setId(null);
+                    kline.setSymbol(symbol);
+                    kline.setTime(preTime);
 
-            open = firstKline.getOpen();
-            close = lastKline.getClose();
-
-            for (Kline temp : klines) {
-                turnOver += Double.parseDouble(temp.getTurnover());
-                volume += Double.parseDouble(temp.getVolume());
-
-                if (high == null && low == null) {
-                    high = temp.getHigh();
-                    low = temp.getLow();
-                    continue;
+                    klineRepository.save(kline);
                 }
-                double tempHigh = Double.parseDouble(temp.getHigh());
-                double tempLow = Double.parseDouble(temp.getLow());
-                if (Double.parseDouble(high) < tempHigh) {
-                    high = temp.getHigh();
-                }
-                if (Double.parseDouble(low) > tempLow) {
-                    low = temp.getLow();
+            } catch (Exception e) {
+                er++;
+                if (failedRequestMaps.containsKey(symbol.getSymbol())) {
+                    List<KlineRequestDTO> klineRequestDTOS = failedRequestMaps.get(symbol.getSymbol());
+                    klineRequestDTOS.add(request);
+                } else {
+                    CopyOnWriteArrayList<KlineRequestDTO> klineRequestDTOS = new CopyOnWriteArrayList<>();
+                    klineRequestDTOS.add(request);
+                    failedRequestMaps.put(symbol.getSymbol(), klineRequestDTOS);
                 }
             }
+        }
+        log.debug(String.valueOf(suc));
+        log.debug(String.valueOf(er));
+    }
 
-            kline.setTime(finalNowCandle.toEpochSecond());
-            kline.setClose(close);
-            kline.setOpen(open);
-            kline.setHigh(high);
-            kline.setLow(low);
-            kline.setSymbol(symbol);
-            kline.setTimeType("15min");
-            kline.setVolume(String.valueOf(volume));
-            kline.setTurnover(String.valueOf(turnOver));
+    @Scheduled(cron = "2 */15 * * * *")
+    public void getKlineFromServer15Min() {
+        ZonedDateTime now = ZonedDateTime.now();
+        now = now.minusNanos(now.getNano());
+        now = now.minusSeconds(now.getSecond());
+        ZonedDateTime preFiveMin = now.minusMinutes(15);
 
-            klineList.add(kline);
+        long time = now.toEpochSecond();
+        long preTime = preFiveMin.toEpochSecond();
+
+        List<Symbol> active = symbolRepository.findAllByActive(true);
+        for (Symbol symbol : active) {
+            KlineRequestDTO request = new KlineRequestDTO()
+                .setSymbol(symbol.getSymbol())
+                .setType("15min")
+                .setStartAt(preTime)
+                .setEndAt(time);
+            try {
+                List<List<String>> klines = kucoinRestBuilder.getKline(request, new HashedMap<>());
+                if (!klines.isEmpty()) {
+                    klines.forEach(strings -> {
+                        Kline kline = new Kline()
+                            .time(Long.valueOf(strings.get(0)))
+                            .open(strings.get(1))
+                            .close(strings.get(2))
+                            .high(strings.get(3))
+                            .low(strings.get(4))
+                            .volume(strings.get(5))
+                            .turnover(strings.get(6))
+                            .timeType("15min")
+                            .symbol(symbol);
+                        klineRepository.save(kline);
+                    });
+                    suc++;
+                } else {
+                    Kline lastKline = klineRepository.findFirstBySymbol_IdAndTimeTypeOrderByTimeDesc(symbol.getId(), "15min");
+                    if (lastKline != null) {
+                        Kline kline = klineMapper.clone(lastKline);
+                        kline.setId(null);
+                        kline.setSymbol(symbol);
+                        kline.setTime(preTime);
+
+                        klineRepository.save(kline);
+                    }
+                }
+            } catch (Exception e) {
+                er++;
+                if (failedRequestMaps.containsKey(symbol.getSymbol())) {
+                    List<KlineRequestDTO> klineRequestDTOS = failedRequestMaps.get(symbol.getSymbol());
+                    klineRequestDTOS.add(request);
+                } else {
+                    CopyOnWriteArrayList<KlineRequestDTO> klineRequestDTOS = new CopyOnWriteArrayList<>();
+                    klineRequestDTOS.add(request);
+                    failedRequestMaps.put(symbol.getSymbol(), klineRequestDTOS);
+                }
+            }
+        }
+        log.debug(String.valueOf(suc));
+        log.debug(String.valueOf(er));
+    }
+
+    @Scheduled(cron = "*/15 * * * * *")
+    public void doFailedRequests() {
+        failedRequestMaps.forEach((symbol, requests) -> {
+            for (KlineRequestDTO request : requests) {
+                log.debug("re-request for {} failed request.", symbol);
+                try {
+                    List<List<String>> klines = kucoinRestBuilder.getKline(request, new HashedMap<>());
+                    if (!klines.isEmpty()) {
+                        klines.forEach(strings -> {
+                            Kline kline = new Kline()
+                                .time(Long.valueOf(strings.get(0)))
+                                .open(strings.get(1))
+                                .close(strings.get(2))
+                                .high(strings.get(3))
+                                .low(strings.get(4))
+                                .volume(strings.get(5))
+                                .turnover(strings.get(6))
+                                .timeType("1min")
+                                .symbol(symbolRepository.findFirstBySymbol(symbol));
+                            klineRepository.save(kline);
+                            requests.remove(request);
+                        });
+                        er--;
+                        suc++;
+                    } else {
+                        requests.remove(request);
+                        er--;
+                        suc++;
+                    }
+                } catch (Exception e) {}
+            }
         });
-        klineRepository.saveAll(klineList);
+        log.debug(String.valueOf(suc));
+        log.debug(String.valueOf(er));
     }
 }

@@ -124,16 +124,16 @@ public class SymbolService {
         List<SymbolResponse> response = kucoinRestClient.symbolAPI().getSymbols();
         List<Symbol> symbols = response
             .stream()
-            .filter(res -> {
-                if (res.getQuoteCurrency().equalsIgnoreCase("usdt")) {
-                    boolean b = symbolRepository.existsAllBySymbol(res.getSymbol());
-                    return !b;
-                } else {
-                    return false;
-                }
-            })
+            .filter(res -> res.getQuoteCurrency().equalsIgnoreCase("usdt"))
             .map(symbolMapper::responseToSymbol)
             .collect(Collectors.toList());
+        for (Symbol symbol : symbols) {
+            Symbol foundedSymbol = symbolRepository.findFirstBySymbol(symbol.getSymbol());
+            if (foundedSymbol != null) {
+                symbol.setId(foundedSymbol.getId());
+                symbol.setActive(foundedSymbol.getActive());
+            }
+        }
         symbolRepository.saveAll(symbols);
     }
 }
